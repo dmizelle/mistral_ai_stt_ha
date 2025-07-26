@@ -1,149 +1,59 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterable
 import io
 import logging
 import wave
-from mistralai import Mistral, File, TranscriptionStreamDone
+from collections.abc import AsyncIterable
 
-import voluptuous as vol
-
-from homeassistant.core import HomeAssistant
-
-from homeassistant.components.stt import (
-    AudioBitRates,
-    AudioChannels,
-    AudioCodecs,
-    AudioFormats,
-    AudioSampleRates,
-    Provider,
-    SpeechMetadata,
-    SpeechResult,
-    SpeechResultState,
-)
 import homeassistant.helpers.config_validation as cv
+import voluptuous as vol
+from homeassistant.components.stt import (AudioBitRates, AudioChannels,
+                                          AudioCodecs, AudioFormats,
+                                          AudioSampleRates, Provider,
+                                          SpeechMetadata, SpeechResult,
+                                          SpeechResultState,
+                                          SpeechToTextEntity)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_API_KEY, CONF_MODEL, CONF_URL
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry
+from homeassistant.helpers.entity_platform import \
+    AddConfigEntryEntitiesCallback
 from homeassistant.helpers.httpx_client import create_async_httpx_client
+from homeassistant.helpers.typing import DiscoveryInfoType
+from mistralai import File, Mistral, TranscriptionStreamDone
 
+from .const import DEFAULT_STT_MODEL, DOMAIN, SUPPORTED_LANGUAGES
 
 _LOGGER = logging.getLogger(__name__)
 
 
-CONF_API_KEY = "api_key"
-CONF_API_URL = "api_url"
-CONF_MODEL = "model"
-CONF_PROMPT = "prompt"
-CONF_TEMP = "temperature"
-
-DEFAULT_API_URL = "https://api.mistral.ai"
-DEFAULT_MODEL = "voxtral-mini-latest"
-DEFAULT_PROMPT = ""
-DEFAULT_TEMP = 0
-
-SUPPORTED_MODELS = [
-    "voxtral-mini-latest",
-    "voxtral-mini-2507"
-]
-
-SUPPORTED_LANGUAGES = [
-    "af",
-    "ar",
-    "hy",
-    "az",
-    "be",
-    "bs",
-    "bg",
-    "ca",
-    "zh",
-    "hr",
-    "cs",
-    "da",
-    "nl",
-    "en",
-    "et",
-    "fi",
-    "fr",
-    "gl",
-    "de",
-    "el",
-    "he",
-    "hi",
-    "hu",
-    "is",
-    "id",
-    "it",
-    "ja",
-    "kn",
-    "kk",
-    "ko",
-    "lv",
-    "lt",
-    "mk",
-    "ms",
-    "mr",
-    "mi",
-    "ne",
-    "no",
-    "fa",
-    "pl",
-    "pt",
-    "ro",
-    "ru",
-    "sr",
-    "sk",
-    "sl",
-    "es",
-    "sw",
-    "sv",
-    "tl",
-    "ta",
-    "th",
-    "tr",
-    "uk",
-    "ur",
-    "vi",
-    "cy",
-]
-
-MODEL_SCHEMA = vol.In(SUPPORTED_MODELS)
-
-PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_API_KEY): cv.string,
-        vol.Optional(CONF_API_URL, default=DEFAULT_API_URL): cv.string,
-        vol.Optional(CONF_MODEL, default=DEFAULT_MODEL): MODEL_SCHEMA,
-        vol.Optional(CONF_PROMPT, default=DEFAULT_PROMPT): cv.string,
-        vol.Optional(CONF_TEMP, default=DEFAULT_TEMP): cv.positive_int,
-    }
-)
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    client = Mistral(
+        api_key=config_entry.data.get(CONF_API_KEY),
+        server_url=config_entry.data.get(CONF_URL),
+        async_client=create_async_httpx_client(
+            hass,
+        ),
+        debug_logger=_LOGGER,
+    )
+    async_add_entities([MistralAISpeechToTextEntity(config_entry, client)])
 
 
-async def async_get_engine(hass: HomeAssistant, config: dict, **_):
+class MistralAISpeechToTextEntity(SpeechToTextEntity):
     """
-    Set up the Mistral AI STT component.
-
-    Arguments:
-        hass: The HomeAssistant instance
-        config: The configuration read from HomeAssistant
-    """
-
-    api_key: str = config.get(CONF_API_KEY, "")
-    api_url: str = config.get(CONF_API_URL, DEFAULT_API_URL)
-    model: str = config.get(CONF_MODEL, DEFAULT_MODEL)
-    prompt: str = config.get(CONF_PROMPT, DEFAULT_PROMPT)
-    temperature: float = config.get(CONF_TEMP, DEFAULT_TEMP)
-    return MistralAISTTProvider(hass, api_key, api_url, model, prompt, temperature)
-
-
-class MistralAISTTProvider(Provider):
-    """
-    The Mistral AI STT provider.
+    The Mistral AI STT entity.
 
     Attributes:
         hass: The current HomeAssistant instance
         name: The name of the provider
     """
 
-    def __init__(self, hass: HomeAssistant, api_key: str, api_url: str, model: str, prompt: str, temperature: float) -> None:
+    def __init__(self, config_entry: ConfigEntry, client: Mistral) -> None:
         """
         Initialize the Mistral AI Speech-to-Text Provider
 
@@ -152,27 +62,19 @@ class MistralAISTTProvider(Provider):
             api_key: The API Key that should be used to authenticate with the inference endpoint
             api_url: The URL to send requests to for transcription
             model: Which model to use for transcription
-            prompt: The prompt to send to the inference endpoint
-            temperature: The temperature parameter to pass to the model
         """
-        self.hass = hass
-        """The current HomeAssistant instance"""
 
-        self.name = "Mistral AI STT"
-        """The name of the instantiated provider"""
-
-        self._api_key = api_key
-        self._api_url = api_url
-        self._model = model
-        self._prompt = prompt
-        self._temperature = temperature
-        self._httpx_client = create_async_httpx_client(hass)
-        self._client = Mistral(
-            api_key = self._api_key,
-            server_url=self._api_url,
-            async_client=self._httpx_client,
-            debug_logger=_LOGGER,
+        self._attr_unique_id = f"{config_entry.entry_id}"
+        self._attr_name = config_entry.title
+        self._attr_device_info = device_registry.DeviceInfo(
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            manufacturer="Mistral AI",
+            model="La Plateforme",
+            entry_type=device_registry.DeviceEntryType.SERVICE,
         )
+        self._entry = config_entry
+        self._client = client
+        self._stt_model = config_entry.options.get(CONF_MODEL, DEFAULT_STT_MODEL)
 
     @property
     def supported_languages(self) -> list[str]:
@@ -192,7 +94,7 @@ class MistralAISTTProvider(Provider):
         Returns:
             list[AudioFormats]: A list of supported audio formats
         """
-        return [AudioFormats.WAV, AudioFormats.OGG]
+        return [AudioFormats.WAV]
 
     @property
     def supported_codecs(self) -> list[AudioCodecs]:
@@ -202,7 +104,7 @@ class MistralAISTTProvider(Provider):
         Returns:
             list[AudioCodecs]: A list of supported audio codecs
         """
-        return [AudioCodecs.PCM, AudioCodecs.OPUS]
+        return [AudioCodecs.PCM]
 
     @property
     def supported_bit_rates(self) -> list[AudioBitRates]:
@@ -266,11 +168,15 @@ class MistralAISTTProvider(Provider):
         _LOGGER.debug(f"Sending request to MistralAI Endpoint")
 
         try:
-            response =  await self._client.audio.transcriptions.stream_async(
-                model=self._model,
-                file=File(content = wav_stream.getvalue(), file_name = "audio.wav", content_type="audio/wav"),
+            response = await self._client.audio.transcriptions.stream_async(
+                model=self._stt_model,
+                file=File(
+                    content=wav_stream.getvalue(),
+                    file_name="audio.wav",
+                    content_type="audio/wav",
+                ),
                 language=metadata.language,
-                temperature=self._temperature,
+                temperature=0.0,
             )
 
             async for chunk in response:
