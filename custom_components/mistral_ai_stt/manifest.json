@@ -7,5 +7,8 @@
   "documentation": "https://github.com/dmizelle/mistral_ai_stt_ha",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/dmizelle/mistral_ai_stt_ha/issues",
-  "version": "0.0.1"
+  "version": "0.0.1",
+  "requirements": [
+    "mistralai==1.9.3"
+  ]
 }
