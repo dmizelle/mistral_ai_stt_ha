@@ -32,9 +32,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
         )
     )
 
-    await client.result().models.retrieve_async(
-        model_id=data.get(CONF_MODEL, DEFAULT_STT_MODEL),
-    )
+    try:
+        await client.models.retrieve_async(
+            model_id=data.get(CONF_MODEL, DEFAULT_STT_MODEL),
+        )
+    except Exception as err:
+        raise err
 
 
 class MistralAISTTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
