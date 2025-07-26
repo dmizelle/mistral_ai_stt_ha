@@ -1,0 +1,11 @@
+{
+  "domain": "mistralai_stt",
+  "name": "Mistral AI Voxtral API",
+  "codeowners": [
+    "@dmizelle"
+  ],
+  "documentation": "https://github.com/dmizelle/mistralai_stt_ha",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/dmizelle/mistralai_stt_ha/issues",
+  "version": "0.0.1"
+}
