@@ -24,7 +24,7 @@ DATA_SCHEMA = vol.Schema(
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
-    client = hass.async_add_executor_job(
+    client = await hass.async_add_executor_job(
         partial(
             Mistral,
             api_key=data.get(CONF_API_KEY),
