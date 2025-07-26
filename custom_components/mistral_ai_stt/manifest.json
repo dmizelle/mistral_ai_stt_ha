@@ -10,5 +10,6 @@
   "version": "0.0.1",
   "requirements": [
     "mistralai==1.9.3"
-  ]
+  ],
+  "config_flow": true
 }
