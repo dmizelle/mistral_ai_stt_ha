@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from mistralai import Mistral
 from mistralai.models.sdkerror import SDKError
 
-from .const import DEFAULT_STT_MODEL, DOMAIN
+from .const import CONF_STT_MODEL, DEFAULT_API_URL, DEFAULT_STT_MODEL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,9 +69,18 @@ class MistralAISTTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
                 _LOGGER.exception("Unhandled exception")
 
+            return self.async_create_entry(
+                title=DOMAIN,
+                data=user_input,
+            )
+
         return self.async_show_form(
             step_id="api",
             data_schema=DATA_SCHEMA,
+            description_placeholders={
+                CONF_STT_MODEL: DEFAULT_STT_MODEL,
+                CONF_URL: DEFAULT_API_URL,
+            },
         )
 
     async def async_step_user(
