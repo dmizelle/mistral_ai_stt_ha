@@ -24,6 +24,7 @@ DATA_SCHEMA = vol.Schema(
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
+    _LOGGER.debug("adding executor job to create client")
     client = await hass.async_add_executor_job(
         partial(
             Mistral,
@@ -33,6 +34,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
     )
 
     try:
+        _LOGGER.debug("listing models asynchronously to test api key")
         await client.models.retrieve_async(
             model_id=data.get(CONF_MODEL, DEFAULT_STT_MODEL),
         )
@@ -56,6 +58,7 @@ class MistralAISTTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except SDKError as err:
                 if err.status_code == 401:
                     errors["base"] = "invalid_auth"
+                    _LOGGER.exception("invalid authentication")
                 else:
                     errors["base"] = "unknown"
                     _LOGGER.exception("Unknown SDK Error")
