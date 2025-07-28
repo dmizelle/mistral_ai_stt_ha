@@ -33,14 +33,19 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    client = Mistral(
-        api_key=config_entry.data.get(CONF_API_KEY),
-        server_url=config_entry.data.get(CONF_URL),
-        async_client=create_async_httpx_client(
-            hass,
-        ),
-        debug_logger=_LOGGER,
-    )
+    try:
+        client = Mistral(
+            api_key=config_entry.data.get(CONF_API_KEY),
+            server_url=config_entry.data.get(CONF_URL),
+            async_client=create_async_httpx_client(
+                hass,
+            ),
+            debug_logger=_LOGGER,
+        )
+    except Exception as err:
+        _LOGGER.exception("error creating mistral client")
+        raise err
+
     async_add_entities([MistralAISpeechToTextEntity(config_entry, client)])
 
 
@@ -159,11 +164,15 @@ class MistralAISpeechToTextEntity(SpeechToTextEntity):
         # Convert audio data to the correct format
         wav_stream = io.BytesIO()
 
-        with wave.open(wav_stream, "wb") as wf:
-            wf.setnchannels(metadata.channel)
-            wf.setsampwidth(metadata.bit_rate // 8)
-            wf.setframerate(metadata.sample_rate)
-            wf.writeframes(audio_data)
+        try:
+            with wave.open(wav_stream, "wb") as wf:
+                wf.setnchannels(metadata.channel)
+                wf.setsampwidth(metadata.bit_rate // 8)
+                wf.setframerate(metadata.sample_rate)
+                wf.writeframes(audio_data)
+        except Exception as err:
+            _LOGGER.exception("error reading wav stream")
+            return SpeechResult("", SpeechResultState.ERROR)
 
         _LOGGER.debug(f"Sending request to MistralAI Endpoint")
 
@@ -183,9 +192,9 @@ class MistralAISpeechToTextEntity(SpeechToTextEntity):
                 if isinstance(chunk.data, TranscriptionStreamDone):
                     return SpeechResult(chunk.data.text, SpeechResultState.SUCCESS)
 
-            _LOGGER.error("Error: Speech to text stream never completed")
+            _LOGGER.exception("Error: Speech to text stream never completed")
             return SpeechResult("", SpeechResultState.ERROR)
 
         except Exception as err:
-            _LOGGER.error("Error: %s", err)
+            _LOGGER.exception("Error: %s", err)
             return SpeechResult("", SpeechResultState.ERROR)

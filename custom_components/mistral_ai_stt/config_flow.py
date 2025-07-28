@@ -17,8 +17,8 @@ _LOGGER = logging.getLogger(__name__)
 DATA_SCHEMA = vol.Schema(
     schema={
         vol.Required(CONF_API_KEY): str,
-        vol.Optional(CONF_URL): str,
-        vol.Optional(CONF_MODEL): str,
+        vol.Optional(CONF_URL, default=DEFAULT_API_URL): str,
+        vol.Optional(CONF_MODEL, default=DEFAULT_STT_MODEL): str,
     }
 )
 
@@ -86,4 +86,4 @@ class MistralAISTTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        return await self.async_step_api()
+        return await self.async_step_api(user_input)
